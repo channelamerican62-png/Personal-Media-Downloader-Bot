@@ -18,10 +18,11 @@ URL_REGEX = re.compile(
     r'(https?://(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?://[^\s]+)'
 )
 
-# Base YouTube bypass arguments (Android/iOS client spoofing to bypass cloud IP bot checks)
+# YouTube bypass: tv_embedded & mediaconnect clients bypass datacenter IP bot checks
+# These work on cloud servers (Render, AWS, etc.) where android/ios clients get blocked
 YOUTUBE_EXTRACTOR_ARGS = {
     'youtube': {
-        'player_client': ['android', 'ios'],
+        'player_client': ['tv_embedded', 'mediaconnect'],
     }
 }
 
