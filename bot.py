@@ -8,6 +8,8 @@ except Exception:
 import os
 import time
 import logging
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from dotenv import load_dotenv
 import telebot
@@ -18,6 +20,7 @@ import downloader
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
+PORT = int(os.getenv("PORT", 10000))
 
 if not BOT_TOKEN:
     print("XATOLIK: BOT_TOKEN topilmadi!")
@@ -53,7 +56,24 @@ def is_authorized(user_id):
     return str(user_id) == str(ADMIN_CHAT_ID)
 
 # ===================================================
-# COMMAND: /START
+# 1. RENDER.COM HEALTH CHECK SERVER (RUNS IN BACKGROUND)
+# ===================================================
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(b"Abdulaziz aka Media Downloader Bot is RUNNING 24/7 on Render!\n")
+    def log_message(self, format, *args):
+        pass
+
+def run_health_server():
+    server = HTTPServer(("0.0.0.0", PORT), HealthCheckHandler)
+    print(f"Health server listening on port {PORT} for Render.com...")
+    server.serve_forever()
+
+# ===================================================
+# 2. COMMAND: /START
 # ===================================================
 @bot.message_handler(commands=['start'])
 def handle_start(message):
@@ -86,7 +106,7 @@ Shunchaki menga istalgan video havolasini yuboring!
     bot.reply_to(message, welcome_text)
 
 # ===================================================
-# TEXT & LINK LISTENER
+# 3. TEXT & LINK LISTENER
 # ===================================================
 @bot.message_handler(func=lambda msg: True, content_types=['text'])
 def handle_text(message):
@@ -139,7 +159,7 @@ def handle_text(message):
         bot.edit_message_text(f"❌ Kutilmagan xatolik: {str(e)}", message.chat.id, status_msg.message_id)
 
 # ===================================================
-# CALLBACK QUERY (BUTTON CLICK)
+# 4. CALLBACK QUERY (BUTTON CLICK)
 # ===================================================
 @bot.callback_query_handler(func=lambda call: call.data.startswith('dl_'))
 def handle_callback(call):
@@ -223,7 +243,7 @@ def handle_callback(call):
             downloader.cleanup_user_files(user_id)
 
 # ===================================================
-# START POLLING
+# 5. START SERVER & POLLING
 # ===================================================
 if __name__ == '__main__':
     print("====================================================")
@@ -232,6 +252,10 @@ if __name__ == '__main__':
     print("🛡 0% Reklama | 0% Majburiy Obuna | 100% Maxfiy")
     print("====================================================")
     
+    # Start Health Check Server in Background Thread
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+
     while True:
         try:
             bot.infinity_polling(timeout=60, long_polling_timeout=60)
