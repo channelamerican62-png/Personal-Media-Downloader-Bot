@@ -1,9 +1,12 @@
 services:
-  - type: worker
+  - type: web
     name: personal-media-downloader-bot
     env: python
+    plan: free
+    region: oregon
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
+    healthCheckPath: /
     envVars:
       - key: BOT_TOKEN
         sync: false
