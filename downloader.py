@@ -18,17 +18,12 @@ URL_REGEX = re.compile(
     r'(https?://(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?://[^\s]+)'
 )
 
-# YouTube bypass: tv_embedded & mediaconnect clients bypass datacenter IP bot checks
-# These work on cloud servers (Render, AWS, etc.) where android/ios clients get blocked
+# Advanced YouTube bypass: direct mobile API extraction skipping webpage HTML bot-gates
 YOUTUBE_EXTRACTOR_ARGS = {
     'youtube': {
-        'player_client': ['tv_embedded', 'mediaconnect'],
+        'player_client': ['android_creator', 'android_embedded', 'tv_embedded', 'mediaconnect', 'android'],
+        'player_skip': ['configs', 'webpage']
     }
-}
-
-DEFAULT_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
-    'Accept-Language': 'en-US,en;q=0.9',
 }
 
 def extract_urls(text: str):
@@ -43,7 +38,6 @@ def get_media_info(url: str):
         'skip_download': True,
         'extract_flat': False,
         'extractor_args': YOUTUBE_EXTRACTOR_ARGS,
-        'http_headers': DEFAULT_HEADERS
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
@@ -58,6 +52,22 @@ def get_media_info(url: str):
                 'filesize_approx': info.get('filesize_approx', 0)
             }
         except Exception as e:
+            yt_match = re.search(r'(?:v=|youtu\.be/|shorts/)([a-zA-Z0-9_-]{11})', url)
+            if yt_match:
+                embed_url = f"https://www.youtube-nocookie.com/embed/{yt_match.group(1)}"
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl_fb:
+                        info_fb = ydl_fb.extract_info(embed_url, download=False)
+                        if info_fb:
+                            return {
+                                'title': info_fb.get('title', 'YouTube Video'),
+                                'uploader': info_fb.get('uploader') or 'YouTube',
+                                'duration': info_fb.get('duration', 0),
+                                'thumbnail': info_fb.get('thumbnail', None),
+                                'filesize_approx': info_fb.get('filesize_approx', 0)
+                            }
+                except Exception:
+                    pass
             return {'error': str(e)}
 
 def download_video(url: str, user_id: int, quality: str = "auto"):
@@ -81,7 +91,6 @@ def download_video(url: str, user_id: int, quality: str = "auto"):
         'concurrent_fragment_downloads': 8,
         'buffersize': 1048576,
         'extractor_args': YOUTUBE_EXTRACTOR_ARGS,
-        'http_headers': DEFAULT_HEADERS
     }
     if FFMPEG_PATH:
         ydl_opts['ffmpeg_location'] = FFMPEG_PATH
@@ -130,7 +139,6 @@ def download_audio(url: str, user_id: int):
         'no_warnings': True,
         'concurrent_fragment_downloads': 8,
         'extractor_args': YOUTUBE_EXTRACTOR_ARGS,
-        'http_headers': DEFAULT_HEADERS,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
