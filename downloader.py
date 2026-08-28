@@ -18,6 +18,18 @@ URL_REGEX = re.compile(
     r'(https?://(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?://[^\s]+)'
 )
 
+# Base YouTube bypass arguments (Android/iOS client spoofing to bypass cloud IP bot checks)
+YOUTUBE_EXTRACTOR_ARGS = {
+    'youtube': {
+        'player_client': ['android', 'ios'],
+    }
+}
+
+DEFAULT_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+    'Accept-Language': 'en-US,en;q=0.9',
+}
+
 def extract_urls(text: str):
     if not text:
         return []
@@ -28,7 +40,9 @@ def get_media_info(url: str):
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
-        'extract_flat': False
+        'extract_flat': False,
+        'extractor_args': YOUTUBE_EXTRACTOR_ARGS,
+        'http_headers': DEFAULT_HEADERS
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
@@ -46,13 +60,8 @@ def get_media_info(url: str):
             return {'error': str(e)}
 
 def download_video(url: str, user_id: int, quality: str = "auto"):
-    """
-    Download video with smart Telegram 50MB limit adaptation.
-    quality options: 'auto', '720p', '480p', '360p'
-    """
     out_template = str(DOWNLOADS_DIR / f"{user_id}_video_%(id)s.%(ext)s")
     
-    # Format selection string based on quality
     if quality == "480p":
         fmt = 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]/18/best'
     elif quality == "360p":
@@ -68,8 +77,10 @@ def download_video(url: str, user_id: int, quality: str = "auto"):
         'quiet': True,
         'no_warnings': True,
         'merge_output_format': 'mp4',
-        'concurrent_fragment_downloads': 8, # 8x Multi-threaded chunk downloads
-        'buffersize': 1048576, # 1MB buffer for fast streaming
+        'concurrent_fragment_downloads': 8,
+        'buffersize': 1048576,
+        'extractor_args': YOUTUBE_EXTRACTOR_ARGS,
+        'http_headers': DEFAULT_HEADERS
     }
     if FFMPEG_PATH:
         ydl_opts['ffmpeg_location'] = FFMPEG_PATH
@@ -79,7 +90,6 @@ def download_video(url: str, user_id: int, quality: str = "auto"):
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             
-            # Check for merged mp4
             if not os.path.exists(filename):
                 mp4_filename = os.path.splitext(filename)[0] + ".mp4"
                 if os.path.exists(mp4_filename):
@@ -94,9 +104,7 @@ def download_video(url: str, user_id: int, quality: str = "auto"):
 
             filesize = os.path.getsize(filename)
             
-            # Telegram 50MB check (49MB max for safety)
             if filesize > 49 * 1024 * 1024 and quality != "360p":
-                # Fallback to lower resolution
                 cleanup_user_files(user_id)
                 return download_video(url, user_id, quality="360p")
 
@@ -112,7 +120,6 @@ def download_video(url: str, user_id: int, quality: str = "auto"):
             return {'success': False, 'error': str(e)}
 
 def download_audio(url: str, user_id: int):
-    """Extract and download MP3 audio."""
     out_template = str(DOWNLOADS_DIR / f"{user_id}_audio_%(id)s.%(ext)s")
     
     ydl_opts = {
@@ -121,6 +128,8 @@ def download_audio(url: str, user_id: int):
         'quiet': True,
         'no_warnings': True,
         'concurrent_fragment_downloads': 8,
+        'extractor_args': YOUTUBE_EXTRACTOR_ARGS,
+        'http_headers': DEFAULT_HEADERS,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
